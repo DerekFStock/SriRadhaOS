@@ -122,6 +122,13 @@ import Testing
     #expect(second.sampleNumber == 2)
 }
 
+@Test func presentationFormatterUsesSeveritySymbols() {
+    #expect(PresentationFormatter.severitySymbol(for: .calm) == "·")
+    #expect(PresentationFormatter.severitySymbol(for: .elevated) == "!")
+    #expect(PresentationFormatter.severitySymbol(for: .high) == "!!")
+    #expect(PresentationFormatter.severitySymbol(for: .severe) == "!!!")
+}
+
 private func makeSnapshot(
     cpu: Double,
     topCPU: Double,

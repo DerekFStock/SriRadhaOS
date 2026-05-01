@@ -9,10 +9,10 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
     private let menu = NSMenu()
     private var timer: Timer?
 
-    private let loadItem = NSMenuItem(title: "Load: --", action: nil, keyEquivalent: "")
+    private let loadItem = NSMenuItem(title: "System: --", action: nil, keyEquivalent: "")
     private let memoryItem = NSMenuItem(title: "Memory: --", action: nil, keyEquivalent: "")
-    private let diagnosisItem = NSMenuItem(title: "Diagnosis: --", action: nil, keyEquivalent: "")
-    private let changeItem = NSMenuItem(title: "Recent Change: --", action: nil, keyEquivalent: "")
+    private let diagnosisItem = NSMenuItem(title: "Likely Cause: --", action: nil, keyEquivalent: "")
+    private let changeItem = NSMenuItem(title: "Changed Recently: --", action: nil, keyEquivalent: "")
     private let processHeaderItem = NSMenuItem(title: "Top Processes", action: nil, keyEquivalent: "")
     private var processItems: [NSMenuItem] = []
     private let updatedItem = NSMenuItem(title: "Updated: --", action: nil, keyEquivalent: "")
@@ -22,7 +22,7 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         setupMenu()
-        statusItem.button?.title = "SR --"
+        statusItem.button?.title = "SR · --"
         statusItem.menu = menu
         refresh()
 
@@ -88,21 +88,22 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
             let update = try session.nextUpdate()
             apply(update: update)
         } catch {
-            statusItem.button?.title = "SR !"
-            diagnosisItem.title = "Diagnosis: Failed to sample resources"
-            changeItem.title = "Recent Change: \(error)"
+            statusItem.button?.title = "SR !!!"
+            diagnosisItem.title = "Likely Cause: Failed to sample resources"
+            changeItem.title = "Changed Recently: \(error)"
         }
     }
 
     private func apply(update: ObservationUpdate) {
         let snapshot = update.snapshot
-        statusItem.button?.title = "SR \(snapshot.totalCPUUsage.formatted(.number.precision(.fractionLength(0...0))))%"
+        let statusSymbol = PresentationFormatter.severitySymbol(for: snapshot.pressureLevel)
+        let statusCPU = snapshot.totalCPUUsage.formatted(.number.precision(.fractionLength(0...0)))
+        statusItem.button?.title = "SR \(statusSymbol) \(statusCPU)%"
 
-        loadItem.title = "Load: \(snapshot.pressureLevel.rawValue) - CPU \(snapshot.totalCPUUsage.formatted(.number.precision(.fractionLength(0...1))))%"
-        memoryItem.title =
-            "Memory: \(snapshot.memory.pressureLevel.rawValue) - Swap \(snapshot.memory.swapUsedMB.formatted(.number.precision(.fractionLength(0...1)))) MB"
-        diagnosisItem.title = "Diagnosis: \(snapshot.diagnosis.summary)"
-        changeItem.title = "Recent Change: \(update.changeSummary.summary)"
+        loadItem.title = "System: \(PresentationFormatter.shortLoadLine(cpuUsage: snapshot.totalCPUUsage, level: snapshot.pressureLevel))"
+        memoryItem.title = "Memory: \(PresentationFormatter.shortMemoryLine(snapshot.memory))"
+        diagnosisItem.title = "Likely Cause: \(snapshot.diagnosis.summary)"
+        changeItem.title = "Changed Recently: \(update.changeSummary.summary)"
         updatedItem.title = "Updated: \(snapshot.timestamp.formatted(date: .omitted, time: .standard))"
 
         for (index, item) in processItems.enumerated() {
@@ -110,7 +111,7 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
                 let process = snapshot.topProcesses[index]
                 let cpu = process.cpuPercent.formatted(.number.precision(.fractionLength(0...1)))
                 let memory = process.memoryMB.formatted(.number.precision(.fractionLength(0...1)))
-                item.title = "  \(index + 1). \(process.name) - CPU \(cpu)% - Mem \(memory) MB"
+                item.title = "  \(index + 1). \(process.name)  CPU \(cpu)%  Mem \(memory) MB"
             } else {
                 item.title = "  --"
             }
@@ -123,9 +124,10 @@ private func runSelfTest() {
 
     do {
         let update = try session.nextUpdate()
-        print("Menu Title: SR \(update.snapshot.totalCPUUsage.formatted(.number.precision(.fractionLength(0...0))))%")
-        print("Diagnosis: \(update.snapshot.diagnosis.summary)")
-        print("Recent Change: \(update.changeSummary.summary)")
+        let symbol = PresentationFormatter.severitySymbol(for: update.snapshot.pressureLevel)
+        print("Menu Title: SR \(symbol) \(update.snapshot.totalCPUUsage.formatted(.number.precision(.fractionLength(0...0))))%")
+        print("Likely Cause: \(update.snapshot.diagnosis.summary)")
+        print("Changed Recently: \(update.changeSummary.summary)")
     } catch {
         fputs("Menu bar self-test failed: \(error)\n", stderr)
         exit(1)

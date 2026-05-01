@@ -74,12 +74,12 @@ public enum ResourceScorer {
         let summary: String
         switch cpuLevel {
         case .calm:
-            summary = "\(leader.name) is the busiest visible process, but overall CPU pressure is low."
+            summary = "\(leader.name) is currently the busiest visible process, but overall CPU pressure is low."
         case .elevated:
             summary = "\(leader.name) is contributing most to current CPU pressure."
         case .high, .severe:
             let roundedCPU = leader.cpuPercent.formatted(.number.precision(.fractionLength(0...1)))
-            summary = "\(leader.name) is the leading source of CPU pressure at \(roundedCPU)% CPU."
+            summary = "\(leader.name) is leading CPU pressure at \(roundedCPU)% CPU."
         }
 
         return Diagnosis(

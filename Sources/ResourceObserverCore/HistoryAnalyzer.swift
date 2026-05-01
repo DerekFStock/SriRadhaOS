@@ -16,7 +16,7 @@ public enum HistoryAnalyzer {
             let currentSwap = current.memory.swapUsedMB
                 .formatted(.number.precision(.fractionLength(0...1)))
             return ChangeSummary(
-                summary: "Memory pressure increased since the last sample. Swap is now \(currentSwap) MB.",
+                summary: "Memory pressure rose since the last sample. Swap is now \(currentSwap) MB.",
                 processSpike: nil
             )
         }
@@ -40,7 +40,7 @@ public enum HistoryAnalyzer {
 
         if let spikingProcess = leadingProcessSpike(current: current, baseline: baseline) {
             return ChangeSummary(
-                summary: "\(spikingProcess.name) spiked compared with the previous sample.",
+                summary: "\(spikingProcess.name) jumped noticeably since the previous sample.",
                 processSpike: spikingProcess
             )
         }
