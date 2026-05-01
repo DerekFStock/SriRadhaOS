@@ -3,6 +3,41 @@ import Foundation
 import ResourceObserverCore
 
 @MainActor
+final class MenuTextItemView: NSView {
+    private let label = NSTextField(labelWithString: "")
+
+    init(width: CGFloat = 560) {
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.lineBreakMode = .byWordWrapping
+        label.maximumNumberOfLines = 0
+        label.backgroundColor = .clear
+        addSubview(label)
+
+        NSLayoutConstraint.activate([
+            widthAnchor.constraint(equalToConstant: width),
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 18),
+            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -18),
+            label.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+            label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8)
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func setAttributedText(_ text: NSAttributedString) {
+        label.attributedStringValue = text
+        let fitting = fittingSize
+        frame.size = NSSize(width: fitting.width, height: max(fitting.height, 28))
+    }
+}
+
+@MainActor
 final class MenuBarController: NSObject, NSApplicationDelegate {
     private let session = ObservationSession(topProcessLimit: 3, historyCapacity: 60)
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -22,7 +57,7 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         setupMenu()
-        statusItem.button?.title = "SR · --"
+        setStatusTitle(symbol: "·", percentageText: "--", color: .white)
         statusItem.menu = menu
         refresh()
 
@@ -83,7 +118,7 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
             let update = try session.nextUpdate()
             apply(update: update)
         } catch {
-            statusItem.button?.title = "SR !!!"
+            setStatusTitle(symbol: "!!!", percentageText: "--", color: .systemRed)
             setDisplayText(diagnosisItem, text: "Likely Cause: Failed to sample resources")
             setDisplayText(changeItem, text: "Changed Recently: \(error)")
         }
@@ -92,8 +127,12 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
     private func apply(update: ObservationUpdate) {
         let snapshot = update.snapshot
         let statusSymbol = PresentationFormatter.severitySymbol(for: snapshot.pressureLevel)
-        let statusCPU = snapshot.totalCPUUsage.formatted(.number.precision(.fractionLength(0...0)))
-        statusItem.button?.title = "SR \(statusSymbol) \(statusCPU)%"
+        let statusCPU = snapshot.totalCPUUsage.formatted(.number.precision(.fractionLength(0...0))) + "%"
+        setStatusTitle(
+            symbol: statusSymbol,
+            percentageText: statusCPU,
+            color: colorForUsage(snapshot.totalCPUUsage)
+        )
 
         setSystemLine(snapshot)
         setDisplayText(memoryItem, text: "Memory: \(PresentationFormatter.shortMemoryLine(snapshot.memory))")
@@ -120,32 +159,39 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
     }
 
     private func setDisplayText(_ item: NSMenuItem, text: String, bold: Bool = false) {
-        item.attributedTitle = NSAttributedString(
+        let attributed = NSAttributedString(
             string: text,
             attributes: [
                 .foregroundColor: NSColor.white,
-                .font: bold ? NSFont.menuBarFont(ofSize: 15) : NSFont.menuFont(ofSize: 15)
+                .font: bold ? NSFont.boldSystemFont(ofSize: 15) : NSFont.menuFont(ofSize: 15)
             ]
         )
+        setDisplayView(item, attributedText: attributed)
     }
 
     private func setSystemLine(_ snapshot: SystemSnapshot) {
         let percentText = snapshot.totalCPUUsage.formatted(.number.precision(.fractionLength(0...1))) + "%"
         let text = "System: \(PresentationFormatter.shortLoadLine(cpuUsage: snapshot.totalCPUUsage, level: snapshot.pressureLevel))"
-        loadItem.attributedTitle = attributedText(
+        setDisplayView(loadItem, attributedText: attributedText(
             fullText: text,
             highlights: [(percentText, colorForUsage(snapshot.totalCPUUsage))]
-        )
+        ))
     }
 
     private func setProcessLine(item: NSMenuItem, index: Int, process: ProcessSnapshot) {
         let cpuValue = process.cpuPercent.formatted(.number.precision(.fractionLength(0...1))) + "%"
         let memoryValue = process.memoryMB.formatted(.number.precision(.fractionLength(0...1))) + " MB"
         let text = "  \(index). \(process.name)  CPU \(cpuValue)  Mem \(memoryValue)"
-        item.attributedTitle = attributedText(
+        setDisplayView(item, attributedText: attributedText(
             fullText: text,
             highlights: [(cpuValue, colorForUsage(process.cpuPercent))]
-        )
+        ))
+    }
+
+    private func setDisplayView(_ item: NSMenuItem, attributedText: NSAttributedString) {
+        let view = (item.view as? MenuTextItemView) ?? MenuTextItemView()
+        view.setAttributedText(attributedText)
+        item.view = view
     }
 
     private func attributedText(
@@ -168,6 +214,26 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
         }
 
         return attributed
+    }
+
+    private func setStatusTitle(symbol: String, percentageText: String, color: NSColor) {
+        guard let button = statusItem.button else {
+            return
+        }
+
+        let fullText = "SR \(symbol) \(percentageText)"
+        let attributed = NSMutableAttributedString(
+            string: fullText,
+            attributes: [
+                .foregroundColor: NSColor.white,
+                .font: NSFont.menuBarFont(ofSize: 14)
+            ]
+        )
+        let range = (fullText as NSString).range(of: percentageText)
+        if range.location != NSNotFound {
+            attributed.addAttribute(.foregroundColor, value: color, range: range)
+        }
+        button.attributedTitle = attributed
     }
 
     private func colorForUsage(_ usage: Double) -> NSColor {
