@@ -14,6 +14,10 @@ let package = Package(
         .executable(
             name: "ResourceObserverCLI",
             targets: ["ResourceObserverCLI"]
+        ),
+        .executable(
+            name: "ResourceObserverMenuBar",
+            targets: ["ResourceObserverMenuBar"]
         )
     ],
     targets: [
@@ -22,6 +26,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "ResourceObserverCLI",
+            dependencies: ["ResourceObserverCore"]
+        ),
+        .executableTarget(
+            name: "ResourceObserverMenuBar",
             dependencies: ["ResourceObserverCore"]
         ),
         .testTarget(

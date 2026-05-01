@@ -112,6 +112,16 @@ import Testing
     #expect(adjustedForeground > adjustedBackground)
 }
 
+@Test func observationSessionAdvancesSampleNumbers() throws {
+    let session = ObservationSession(topProcessLimit: 3, historyCapacity: 5)
+
+    let first = try session.nextUpdate()
+    let second = try session.nextUpdate()
+
+    #expect(first.sampleNumber == 1)
+    #expect(second.sampleNumber == 2)
+}
+
 private func makeSnapshot(
     cpu: Double,
     topCPU: Double,

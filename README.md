@@ -40,7 +40,7 @@ The project is being built with:
 
 - `Swift`
 - a `Swift Package` for core logic and CLI iteration
-- a future native macOS menu bar app using `AppKit` and optionally `SwiftUI`
+- a native macOS menu bar shell using `AppKit`
 
 This structure keeps the core logic easy to build and test from the command line while staying aligned with a proper macOS app architecture.
 
@@ -49,15 +49,16 @@ This structure keeps the core logic easy to build and test from the command line
 Current status:
 
 - planning docs are in place
-- Swift package scaffolding is being established
-- first milestone is a CPU-focused CLI prototype
+- Swift package scaffolding is in place
+- CLI observer prototype is running with CPU, memory, and recent-change detection
+- native menu bar shell target is available for early testing
 
 Near-term roadmap:
 
 1. scaffold the package structure
 2. build a CLI sampler for total CPU and top processes
 3. add scoring and diagnosis logic
-4. wrap the core engine in a native macOS menu bar app
+4. improve the native menu bar experience and data fidelity
 
 ## Repository Layout
 
@@ -69,6 +70,7 @@ SriRadhaOS/
   Sources/
     ResourceObserverCore/
     ResourceObserverCLI/
+    ResourceObserverMenuBar/
   Tests/
     ResourceObserverCoreTests/
 ```
@@ -84,6 +86,12 @@ swift run ResourceObserverCLI
 ```
 
 The CLI will be the fastest place to validate the sampling and diagnosis engine before the desktop UI is added.
+
+Menu bar self-test:
+
+```bash
+swift run ResourceObserverMenuBar --self-test
+```
 
 ## Documentation
 

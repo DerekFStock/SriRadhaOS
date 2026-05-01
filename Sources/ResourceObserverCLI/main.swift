@@ -49,8 +49,7 @@ struct CLIConfiguration {
 }
 
 let configuration = CLIConfiguration.parse(arguments: Array(CommandLine.arguments.dropFirst()))
-let observer = ResourceObserver(topProcessLimit: configuration.topProcessLimit)
-var history = RollingHistory<SystemSnapshot>(capacity: 60)
+let session = ObservationSession(topProcessLimit: configuration.topProcessLimit)
 
 print(ProjectInfo.name)
 print(ProjectInfo.mission)
@@ -60,17 +59,8 @@ print("Press Ctrl-C to stop.\n")
 var iteration = 0
 while configuration.sampleCount == nil || iteration < configuration.sampleCount! {
     do {
-        let snapshot = try observer.sample()
-        history.append(snapshot)
-        let changeSummary = HistoryAnalyzer.summarize(
-            current: snapshot,
-            history: history.items
-        )
-        render(
-            snapshot: snapshot,
-            changeSummary: changeSummary,
-            sampleNumber: iteration + 1
-        )
+        let update = try session.nextUpdate()
+        render(update: update)
     } catch {
         fputs("Failed to sample system resources: \(error)\n", stderr)
     }
@@ -83,13 +73,14 @@ while configuration.sampleCount == nil || iteration < configuration.sampleCount!
     Thread.sleep(forTimeInterval: configuration.interval)
 }
 
-func render(snapshot: SystemSnapshot, changeSummary: ChangeSummary, sampleNumber: Int) {
+func render(update: ObservationUpdate) {
+    let snapshot = update.snapshot
     let timestamp = snapshot.timestamp.formatted(
         date: .omitted,
         time: .standard
     )
 
-    print("Sample \(sampleNumber) at \(timestamp)")
+    print("Sample \(update.sampleNumber) at \(timestamp)")
     print("Load: \(snapshot.pressureLevel.rawValue)")
     print("CPU: \(snapshot.totalCPUUsage.formatted(.number.precision(.fractionLength(0...1))))%")
     print(
@@ -114,5 +105,5 @@ func render(snapshot: SystemSnapshot, changeSummary: ChangeSummary, sampleNumber
     }
 
     print("Diagnosis: \(snapshot.diagnosis.summary)")
-    print("Recent Change: \(changeSummary.summary)\n")
+    print("Recent Change: \(update.changeSummary.summary)\n")
 }
