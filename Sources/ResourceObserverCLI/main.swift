@@ -100,7 +100,7 @@ func render(update: ObservationUpdate) {
         for (index, process) in snapshot.topProcesses.enumerated() {
             let cpu = process.cpuPercent.formatted(.number.precision(.fractionLength(0...1)))
             let memory = process.memoryMB.formatted(.number.precision(.fractionLength(0...1)))
-            print("  \(index + 1). \(process.name) (pid \(process.pid)) - CPU \(cpu)% - Mem \(memory) MB")
+            print("  \(index + 1). \(process.name) - CPU \(cpu)% - Mem \(memory) MB")
         }
     }
 

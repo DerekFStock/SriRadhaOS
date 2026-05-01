@@ -14,7 +14,7 @@ public final class ResourceObserver {
     private let processReader = ProcessMetricsReader()
     private let topProcessLimit: Int
     private var previousCPUTicks: host_cpu_load_info_data_t?
-    private var previousProcessImpactByPID: [Int32: Double] = [:]
+    private var previousProcessImpactByKey: [String: Double] = [:]
 
     public init(topProcessLimit: Int = 3) {
         self.topProcessLimit = max(1, topProcessLimit)
@@ -27,7 +27,7 @@ public final class ResourceObserver {
         let candidates = try processReader.processCandidates(
             excluding: [currentPID]
         )
-        let topProcesses = rankProcesses(candidates)
+        let topProcesses = rankProcesses(ProcessGrouper.group(candidates))
         let diagnosis = ResourceScorer.diagnosis(
             totalCPUUsage: totalCPUUsage,
             memory: memory,
@@ -45,19 +45,21 @@ public final class ResourceObserver {
     }
 
     private func rankProcesses(_ candidates: [ProcessSnapshot]) -> [ProcessSnapshot] {
-        var nextImpactByPID: [Int32: Double] = [:]
+        var nextImpactByKey: [String: Double] = [:]
 
         let ranked = candidates
             .filter { !ProcessNoiseReducer.shouldIgnore(process: $0) }
             .map { process -> ProcessSnapshot in
                 let adjustedImpact = ProcessNoiseReducer.adjustedImpactScore(for: process)
-                let previousImpact = previousProcessImpactByPID[process.pid] ?? adjustedImpact
+                let previousImpact = previousProcessImpactByKey[process.identityKey] ?? adjustedImpact
                 let smoothedImpact = (adjustedImpact * 0.7) + (previousImpact * 0.3)
-                nextImpactByPID[process.pid] = smoothedImpact
+                nextImpactByKey[process.identityKey] = smoothedImpact
 
                 return ProcessSnapshot(
                     pid: process.pid,
+                    identityKey: process.identityKey,
                     name: process.name,
+                    sourceCount: process.sourceCount,
                     cpuPercent: process.cpuPercent,
                     memoryMB: process.memoryMB,
                     impactScore: smoothedImpact
@@ -73,7 +75,7 @@ public final class ResourceObserver {
                 return lhs.impactScore > rhs.impactScore
             }
 
-        previousProcessImpactByPID = nextImpactByPID
+        previousProcessImpactByKey = nextImpactByKey
         return Array(ranked.prefix(topProcessLimit))
     }
 

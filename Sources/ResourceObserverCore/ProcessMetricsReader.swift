@@ -23,6 +23,7 @@ struct ProcessMetricsReader {
         return rows.map { row in
             ProcessSnapshot(
                 pid: row.pid,
+                identityKey: "pid-\(row.pid)",
                 name: row.name,
                 cpuPercent: row.cpuPercent,
                 memoryMB: row.memoryMB,

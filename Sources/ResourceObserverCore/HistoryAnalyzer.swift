@@ -64,11 +64,11 @@ public enum HistoryAnalyzer {
         current: SystemSnapshot,
         baseline: SystemSnapshot
     ) -> ProcessSnapshot? {
-        let baselineByPID = Dictionary(uniqueKeysWithValues: baseline.topProcesses.map { ($0.pid, $0) })
+        let baselineByKey = Dictionary(uniqueKeysWithValues: baseline.topProcesses.map { ($0.identityKey, $0) })
 
         return current.topProcesses
             .map { process -> (ProcessSnapshot, Double) in
-                let baselineCPU = baselineByPID[process.pid]?.cpuPercent ?? 0
+                let baselineCPU = baselineByKey[process.identityKey]?.cpuPercent ?? 0
                 return (process, process.cpuPercent - baselineCPU)
             }
             .filter { _, delta in delta >= 20 }

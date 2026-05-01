@@ -30,6 +30,7 @@ import Testing
         topProcesses: [
             ProcessSnapshot(
                 pid: 42,
+                identityKey: "xcode",
                 name: "Xcode",
                 cpuPercent: 61,
                 memoryMB: 1200,
@@ -93,6 +94,7 @@ import Testing
 @Test func backgroundNoiseGetsDeprioritizedBelowHeavyForegroundWork() {
     let backgroundProcess = ProcessSnapshot(
         pid: 10,
+        identityKey: "corespotlightd",
         name: "corespotlightd",
         cpuPercent: 50,
         memoryMB: 300,
@@ -100,6 +102,7 @@ import Testing
     )
     let foregroundProcess = ProcessSnapshot(
         pid: 11,
+        identityKey: "xcode",
         name: "Xcode",
         cpuPercent: 45,
         memoryMB: 900,
@@ -129,6 +132,32 @@ import Testing
     #expect(PresentationFormatter.severitySymbol(for: .severe) == "!!!")
 }
 
+@Test func processGrouperCombinesChromeHelpers() {
+    let grouped = ProcessGrouper.group([
+        ProcessSnapshot(
+            pid: 100,
+            identityKey: "pid-100",
+            name: "Google Chrome Helper",
+            cpuPercent: 12,
+            memoryMB: 220,
+            impactScore: 14
+        ),
+        ProcessSnapshot(
+            pid: 101,
+            identityKey: "pid-101",
+            name: "Google Chrome Helper (Renderer)",
+            cpuPercent: 18,
+            memoryMB: 430,
+            impactScore: 21
+        )
+    ])
+
+    #expect(grouped.count == 1)
+    #expect(grouped[0].name.contains("Google Chrome"))
+    #expect(grouped[0].sourceCount == 2)
+    #expect(grouped[0].cpuPercent == 30)
+}
+
 private func makeSnapshot(
     cpu: Double,
     topCPU: Double,
@@ -144,6 +173,7 @@ private func makeSnapshot(
     )
     let process = ProcessSnapshot(
         pid: 42,
+        identityKey: processName.lowercased(),
         name: processName,
         cpuPercent: topCPU,
         memoryMB: 500,

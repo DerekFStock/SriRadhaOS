@@ -16,20 +16,26 @@ public enum Bottleneck: String, Sendable {
 
 public struct ProcessSnapshot: Sendable, Equatable {
     public let pid: Int32
+    public let identityKey: String
     public let name: String
+    public let sourceCount: Int
     public let cpuPercent: Double
     public let memoryMB: Double
     public let impactScore: Double
 
     public init(
         pid: Int32,
+        identityKey: String,
         name: String,
+        sourceCount: Int = 1,
         cpuPercent: Double,
         memoryMB: Double,
         impactScore: Double
     ) {
         self.pid = pid
+        self.identityKey = identityKey
         self.name = name
+        self.sourceCount = sourceCount
         self.cpuPercent = cpuPercent
         self.memoryMB = memoryMB
         self.impactScore = impactScore
