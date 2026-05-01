@@ -123,6 +123,8 @@ import Testing
 
     #expect(first.sampleNumber == 1)
     #expect(second.sampleNumber == 2)
+    #expect(first.recentSnapshots.count == 1)
+    #expect(second.recentSnapshots.count == 2)
 }
 
 @Test func presentationFormatterUsesSeveritySymbols() {

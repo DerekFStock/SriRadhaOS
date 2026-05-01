@@ -38,6 +38,92 @@ final class MenuTextItemView: NSView {
 }
 
 @MainActor
+final class HistorySparklineView: NSView {
+    private let titleLabel = NSTextField(labelWithString: "")
+    private var samples: [Double] = []
+
+    init(width: CGFloat = 560) {
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.backgroundColor = .clear
+        addSubview(titleLabel)
+
+        NSLayoutConstraint.activate([
+            widthAnchor.constraint(equalToConstant: width),
+            heightAnchor.constraint(equalToConstant: 78),
+            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 18),
+            titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 8)
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func configure(samples: [Double], latestCPU: Double) {
+        self.samples = Array(samples.suffix(20))
+        let latest = latestCPU.formatted(.number.precision(.fractionLength(0...1)))
+        titleLabel.attributedStringValue = NSAttributedString(
+            string: "Recent CPU Trend  \(latest)%",
+            attributes: [
+                .foregroundColor: NSColor.white,
+                .font: NSFont.boldSystemFont(ofSize: 14)
+            ]
+        )
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+
+        let graphRect = NSRect(x: 18, y: 10, width: bounds.width - 36, height: 34)
+        let backgroundPath = NSBezierPath(roundedRect: graphRect, xRadius: 6, yRadius: 6)
+        NSColor(calibratedWhite: 1.0, alpha: 0.08).setFill()
+        backgroundPath.fill()
+
+        guard samples.count > 1 else {
+            return
+        }
+
+        let maxSample = max(samples.max() ?? 0, 10)
+        let minSample = min(samples.min() ?? 0, maxSample)
+        let range = max(maxSample - minSample, 1)
+        let stepX = graphRect.width / CGFloat(max(samples.count - 1, 1))
+
+        let path = NSBezierPath()
+        for (index, sample) in samples.enumerated() {
+            let normalized = (sample - minSample) / range
+            let x = graphRect.minX + (CGFloat(index) * stepX)
+            let y = graphRect.minY + (CGFloat(normalized) * graphRect.height)
+            let point = NSPoint(x: x, y: y)
+            if index == 0 {
+                path.move(to: point)
+            } else {
+                path.line(to: point)
+            }
+        }
+
+        color(for: samples.last ?? 0).setStroke()
+        path.lineWidth = 2
+        path.stroke()
+    }
+
+    private func color(for usage: Double) -> NSColor {
+        switch usage {
+        case ..<35:
+            return .systemGreen
+        case ..<70:
+            return .systemYellow
+        default:
+            return .systemRed
+        }
+    }
+}
+
+@MainActor
 final class MenuBarController: NSObject, NSApplicationDelegate {
     private let session = ObservationSession(topProcessLimit: 3, historyCapacity: 60)
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -48,6 +134,7 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
     private lazy var memoryItem = makeDisplayItem("Memory: --")
     private lazy var diagnosisItem = makeDisplayItem("Likely Cause: --")
     private lazy var changeItem = makeDisplayItem("Changed Recently: --")
+    private let historyItem = NSMenuItem()
     private lazy var processHeaderItem = makeDisplayItem("Top Processes", bold: true)
     private var processItems: [NSMenuItem] = []
     private lazy var updatedItem = makeDisplayItem("Updated: --")
@@ -83,6 +170,7 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
         menu.addItem(memoryItem)
         menu.addItem(diagnosisItem)
         menu.addItem(changeItem)
+        menu.addItem(historyItem)
         menu.addItem(.separator())
         menu.addItem(processHeaderItem)
 
@@ -138,6 +226,7 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
         setDisplayText(memoryItem, text: "Memory: \(PresentationFormatter.shortMemoryLine(snapshot.memory))")
         setDisplayText(diagnosisItem, text: "Likely Cause: \(snapshot.diagnosis.summary)")
         setDisplayText(changeItem, text: "Changed Recently: \(update.changeSummary.summary)")
+        setHistoryView(historyItem, update: update)
         setDisplayText(updatedItem, text: "Updated: \(snapshot.timestamp.formatted(date: .omitted, time: .standard))")
 
         for (index, item) in processItems.enumerated() {
@@ -191,6 +280,15 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
     private func setDisplayView(_ item: NSMenuItem, attributedText: NSAttributedString) {
         let view = (item.view as? MenuTextItemView) ?? MenuTextItemView()
         view.setAttributedText(attributedText)
+        item.view = view
+    }
+
+    private func setHistoryView(_ item: NSMenuItem, update: ObservationUpdate) {
+        let view = (item.view as? HistorySparklineView) ?? HistorySparklineView()
+        view.configure(
+            samples: update.recentSnapshots.map(\.totalCPUUsage),
+            latestCPU: update.snapshot.totalCPUUsage
+        )
         item.view = view
     }
 
@@ -257,6 +355,7 @@ private func runSelfTest() {
         print("Menu Title: SR \(symbol) \(update.snapshot.totalCPUUsage.formatted(.number.precision(.fractionLength(0...0))))%")
         print("Likely Cause: \(update.snapshot.diagnosis.summary)")
         print("Changed Recently: \(update.changeSummary.summary)")
+        print("Recent Samples: \(update.recentSnapshots.count)")
     } catch {
         fputs("Menu bar self-test failed: \(error)\n", stderr)
         exit(1)

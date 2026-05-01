@@ -3,11 +3,18 @@ import Foundation
 public struct ObservationUpdate: Sendable, Equatable {
     public let snapshot: SystemSnapshot
     public let changeSummary: ChangeSummary
+    public let recentSnapshots: [SystemSnapshot]
     public let sampleNumber: Int
 
-    public init(snapshot: SystemSnapshot, changeSummary: ChangeSummary, sampleNumber: Int) {
+    public init(
+        snapshot: SystemSnapshot,
+        changeSummary: ChangeSummary,
+        recentSnapshots: [SystemSnapshot],
+        sampleNumber: Int
+    ) {
         self.snapshot = snapshot
         self.changeSummary = changeSummary
+        self.recentSnapshots = recentSnapshots
         self.sampleNumber = sampleNumber
     }
 }
@@ -39,6 +46,7 @@ public final class ObservationSession {
         return ObservationUpdate(
             snapshot: snapshot,
             changeSummary: changeSummary,
+            recentSnapshots: history.items,
             sampleNumber: sampleNumber
         )
     }
