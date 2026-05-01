@@ -93,6 +93,15 @@ Menu bar self-test:
 swift run ResourceObserverMenuBar --self-test
 ```
 
+Build a reusable `.app` bundle:
+
+```bash
+./scripts/package-menubar-app.sh
+open ./dist/SriRadhaOS.app
+```
+
+This creates a local app bundle at `dist/SriRadhaOS.app` so you can launch the menu bar app like a more normal macOS utility.
+
 ## Documentation
 
 - [MVP Specification](./docs/mvp-specification.md)
