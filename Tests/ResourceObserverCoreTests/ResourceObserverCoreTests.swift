@@ -72,3 +72,56 @@ import Testing
 
     #expect(history.items == [2, 3, 4])
 }
+
+@Test func historyAnalyzerReportsBaselineWhenHistoryIsShort() {
+    let snapshot = makeSnapshot(cpu: 20, topCPU: 35, processName: "Xcode")
+    let summary = HistoryAnalyzer.summarize(current: snapshot, history: [snapshot])
+
+    #expect(summary.summary.contains("Collecting baseline"))
+}
+
+@Test func historyAnalyzerDetectsCpuRiseAndLeader() {
+    let baseline = makeSnapshot(cpu: 22, topCPU: 20, processName: "Xcode")
+    let current = makeSnapshot(cpu: 48, topCPU: 58, processName: "Xcode")
+    let summary = HistoryAnalyzer.summarize(current: current, history: [baseline, current])
+
+    #expect(summary.summary.contains("CPU load rose"))
+    #expect(summary.summary.contains("Xcode"))
+    #expect(summary.processSpike?.name == "Xcode")
+}
+
+private func makeSnapshot(
+    cpu: Double,
+    topCPU: Double,
+    processName: String
+) -> SystemSnapshot {
+    let memory = MemorySnapshot(
+        usedMB: 8_000,
+        freeMB: 4_000,
+        compressedMB: 200,
+        swapUsedMB: 0,
+        swapTotalMB: 1_024,
+        pressureLevel: .calm
+    )
+    let process = ProcessSnapshot(
+        pid: 42,
+        name: processName,
+        cpuPercent: topCPU,
+        memoryMB: 500,
+        impactScore: topCPU + 2
+    )
+    let diagnosis = ResourceScorer.diagnosis(
+        totalCPUUsage: cpu,
+        memory: memory,
+        topProcesses: [process]
+    )
+
+    return SystemSnapshot(
+        timestamp: Date(),
+        totalCPUUsage: cpu,
+        memory: memory,
+        pressureLevel: diagnosis.pressureLevel,
+        topProcesses: [process],
+        diagnosis: diagnosis
+    )
+}

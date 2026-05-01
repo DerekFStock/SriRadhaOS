@@ -62,7 +62,15 @@ while configuration.sampleCount == nil || iteration < configuration.sampleCount!
     do {
         let snapshot = try observer.sample()
         history.append(snapshot)
-        render(snapshot: snapshot, sampleNumber: iteration + 1)
+        let changeSummary = HistoryAnalyzer.summarize(
+            current: snapshot,
+            history: history.items
+        )
+        render(
+            snapshot: snapshot,
+            changeSummary: changeSummary,
+            sampleNumber: iteration + 1
+        )
     } catch {
         fputs("Failed to sample system resources: \(error)\n", stderr)
     }
@@ -75,7 +83,7 @@ while configuration.sampleCount == nil || iteration < configuration.sampleCount!
     Thread.sleep(forTimeInterval: configuration.interval)
 }
 
-func render(snapshot: SystemSnapshot, sampleNumber: Int) {
+func render(snapshot: SystemSnapshot, changeSummary: ChangeSummary, sampleNumber: Int) {
     let timestamp = snapshot.timestamp.formatted(
         date: .omitted,
         time: .standard
@@ -105,5 +113,6 @@ func render(snapshot: SystemSnapshot, sampleNumber: Int) {
         }
     }
 
-    print("Diagnosis: \(snapshot.diagnosis.summary)\n")
+    print("Diagnosis: \(snapshot.diagnosis.summary)")
+    print("Recent Change: \(changeSummary.summary)\n")
 }

@@ -101,3 +101,13 @@ public struct SystemSnapshot: Sendable, Equatable {
         self.diagnosis = diagnosis
     }
 }
+
+public struct ChangeSummary: Sendable, Equatable {
+    public let summary: String
+    public let processSpike: ProcessSnapshot?
+
+    public init(summary: String, processSpike: ProcessSnapshot?) {
+        self.summary = summary
+        self.processSpike = processSpike
+    }
+}
