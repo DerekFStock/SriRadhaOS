@@ -90,6 +90,28 @@ import Testing
     #expect(summary.processSpike?.name == "Xcode")
 }
 
+@Test func backgroundNoiseGetsDeprioritizedBelowHeavyForegroundWork() {
+    let backgroundProcess = ProcessSnapshot(
+        pid: 10,
+        name: "corespotlightd",
+        cpuPercent: 50,
+        memoryMB: 300,
+        impactScore: ResourceScorer.impactScore(cpuPercent: 50, memoryMB: 300)
+    )
+    let foregroundProcess = ProcessSnapshot(
+        pid: 11,
+        name: "Xcode",
+        cpuPercent: 45,
+        memoryMB: 900,
+        impactScore: ResourceScorer.impactScore(cpuPercent: 45, memoryMB: 900)
+    )
+
+    let adjustedBackground = ProcessNoiseReducer.adjustedImpactScore(for: backgroundProcess)
+    let adjustedForeground = ProcessNoiseReducer.adjustedImpactScore(for: foregroundProcess)
+
+    #expect(adjustedForeground > adjustedBackground)
+}
+
 private func makeSnapshot(
     cpu: Double,
     topCPU: Double,

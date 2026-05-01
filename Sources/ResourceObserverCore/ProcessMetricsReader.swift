@@ -8,7 +8,7 @@ struct ProcessMetricsReader {
         let name: String
     }
 
-    func topProcesses(limit: Int, excluding excludedPIDs: Set<Int32>) throws -> [ProcessSnapshot] {
+    func processCandidates(excluding excludedPIDs: Set<Int32>) throws -> [ProcessSnapshot] {
         let output = try shell(
             launchPath: "/bin/ps",
             arguments: ["-Aceo", "pid=,%cpu=,rss=,comm="]
@@ -19,14 +19,8 @@ struct ProcessMetricsReader {
             .compactMap(parseProcess)
             .filter { !excludedPIDs.contains($0.pid) }
             .filter { $0.cpuPercent > 0.1 }
-            .sorted { lhs, rhs in
-                if lhs.cpuPercent == rhs.cpuPercent {
-                    return lhs.memoryMB > rhs.memoryMB
-                }
-                return lhs.cpuPercent > rhs.cpuPercent
-            }
 
-        return Array(rows.prefix(limit)).map { row in
+        return rows.map { row in
             ProcessSnapshot(
                 pid: row.pid,
                 name: row.name,

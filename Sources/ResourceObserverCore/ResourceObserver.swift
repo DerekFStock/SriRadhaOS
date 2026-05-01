@@ -14,6 +14,7 @@ public final class ResourceObserver {
     private let processReader = ProcessMetricsReader()
     private let topProcessLimit: Int
     private var previousCPUTicks: host_cpu_load_info_data_t?
+    private var previousProcessImpactByPID: [Int32: Double] = [:]
 
     public init(topProcessLimit: Int = 3) {
         self.topProcessLimit = max(1, topProcessLimit)
@@ -23,10 +24,10 @@ public final class ResourceObserver {
         let totalCPUUsage = try readTotalCPUUsage()
         let memory = try readMemorySnapshot()
         let currentPID = Int32(ProcessInfo.processInfo.processIdentifier)
-        let topProcesses = try processReader.topProcesses(
-            limit: topProcessLimit,
+        let candidates = try processReader.processCandidates(
             excluding: [currentPID]
         )
+        let topProcesses = rankProcesses(candidates)
         let diagnosis = ResourceScorer.diagnosis(
             totalCPUUsage: totalCPUUsage,
             memory: memory,
@@ -41,6 +42,39 @@ public final class ResourceObserver {
             topProcesses: topProcesses,
             diagnosis: diagnosis
         )
+    }
+
+    private func rankProcesses(_ candidates: [ProcessSnapshot]) -> [ProcessSnapshot] {
+        var nextImpactByPID: [Int32: Double] = [:]
+
+        let ranked = candidates
+            .filter { !ProcessNoiseReducer.shouldIgnore(process: $0) }
+            .map { process -> ProcessSnapshot in
+                let adjustedImpact = ProcessNoiseReducer.adjustedImpactScore(for: process)
+                let previousImpact = previousProcessImpactByPID[process.pid] ?? adjustedImpact
+                let smoothedImpact = (adjustedImpact * 0.7) + (previousImpact * 0.3)
+                nextImpactByPID[process.pid] = smoothedImpact
+
+                return ProcessSnapshot(
+                    pid: process.pid,
+                    name: process.name,
+                    cpuPercent: process.cpuPercent,
+                    memoryMB: process.memoryMB,
+                    impactScore: smoothedImpact
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.impactScore == rhs.impactScore {
+                    if lhs.cpuPercent == rhs.cpuPercent {
+                        return lhs.memoryMB > rhs.memoryMB
+                    }
+                    return lhs.cpuPercent > rhs.cpuPercent
+                }
+                return lhs.impactScore > rhs.impactScore
+            }
+
+        previousProcessImpactByPID = nextImpactByPID
+        return Array(ranked.prefix(topProcessLimit))
     }
 
     private func readTotalCPUUsage() throws -> Double {
