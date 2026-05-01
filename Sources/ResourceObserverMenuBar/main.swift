@@ -9,13 +9,13 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
     private let menu = NSMenu()
     private var timer: Timer?
 
-    private let loadItem = NSMenuItem(title: "System: --", action: nil, keyEquivalent: "")
-    private let memoryItem = NSMenuItem(title: "Memory: --", action: nil, keyEquivalent: "")
-    private let diagnosisItem = NSMenuItem(title: "Likely Cause: --", action: nil, keyEquivalent: "")
-    private let changeItem = NSMenuItem(title: "Changed Recently: --", action: nil, keyEquivalent: "")
-    private let processHeaderItem = NSMenuItem(title: "Top Processes", action: nil, keyEquivalent: "")
+    private lazy var loadItem = makeDisplayItem("System: --")
+    private lazy var memoryItem = makeDisplayItem("Memory: --")
+    private lazy var diagnosisItem = makeDisplayItem("Likely Cause: --")
+    private lazy var changeItem = makeDisplayItem("Changed Recently: --")
+    private lazy var processHeaderItem = makeDisplayItem("Top Processes", bold: true)
     private var processItems: [NSMenuItem] = []
-    private let updatedItem = NSMenuItem(title: "Updated: --", action: nil, keyEquivalent: "")
+    private lazy var updatedItem = makeDisplayItem("Updated: --")
     private let refreshItem = NSMenuItem(title: "Refresh Now", action: #selector(refreshNow), keyEquivalent: "r")
     private let quitItem = NSMenuItem(title: "Quit SriRadhaOS", action: #selector(quit), keyEquivalent: "q")
 
@@ -37,13 +37,7 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
     }
 
     private func setupMenu() {
-        let titleItem = NSMenuItem(title: ProjectInfo.name, action: nil, keyEquivalent: "")
-        titleItem.isEnabled = false
-        processHeaderItem.isEnabled = false
-
-        [loadItem, memoryItem, diagnosisItem, changeItem, updatedItem].forEach {
-            $0.isEnabled = false
-        }
+        let titleItem = makeDisplayItem(ProjectInfo.name, bold: true)
 
         refreshItem.target = self
         quitItem.target = self
@@ -58,8 +52,7 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
         menu.addItem(processHeaderItem)
 
         for _ in 0..<3 {
-            let item = NSMenuItem(title: "  --", action: nil, keyEquivalent: "")
-            item.isEnabled = false
+            let item = makeDisplayItem("  --")
             processItems.append(item)
             menu.addItem(item)
         }
@@ -79,6 +72,8 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
         refresh()
     }
 
+    @objc private func noop() {}
+
     @objc private func quit() {
         NSApp.terminate(nil)
     }
@@ -89,8 +84,8 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
             apply(update: update)
         } catch {
             statusItem.button?.title = "SR !!!"
-            diagnosisItem.title = "Likely Cause: Failed to sample resources"
-            changeItem.title = "Changed Recently: \(error)"
+            setDisplayText(diagnosisItem, text: "Likely Cause: Failed to sample resources")
+            setDisplayText(changeItem, text: "Changed Recently: \(error)")
         }
     }
 
@@ -100,21 +95,89 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
         let statusCPU = snapshot.totalCPUUsage.formatted(.number.precision(.fractionLength(0...0)))
         statusItem.button?.title = "SR \(statusSymbol) \(statusCPU)%"
 
-        loadItem.title = "System: \(PresentationFormatter.shortLoadLine(cpuUsage: snapshot.totalCPUUsage, level: snapshot.pressureLevel))"
-        memoryItem.title = "Memory: \(PresentationFormatter.shortMemoryLine(snapshot.memory))"
-        diagnosisItem.title = "Likely Cause: \(snapshot.diagnosis.summary)"
-        changeItem.title = "Changed Recently: \(update.changeSummary.summary)"
-        updatedItem.title = "Updated: \(snapshot.timestamp.formatted(date: .omitted, time: .standard))"
+        setSystemLine(snapshot)
+        setDisplayText(memoryItem, text: "Memory: \(PresentationFormatter.shortMemoryLine(snapshot.memory))")
+        setDisplayText(diagnosisItem, text: "Likely Cause: \(snapshot.diagnosis.summary)")
+        setDisplayText(changeItem, text: "Changed Recently: \(update.changeSummary.summary)")
+        setDisplayText(updatedItem, text: "Updated: \(snapshot.timestamp.formatted(date: .omitted, time: .standard))")
 
         for (index, item) in processItems.enumerated() {
             if index < snapshot.topProcesses.count {
                 let process = snapshot.topProcesses[index]
-                let cpu = process.cpuPercent.formatted(.number.precision(.fractionLength(0...1)))
-                let memory = process.memoryMB.formatted(.number.precision(.fractionLength(0...1)))
-                item.title = "  \(index + 1). \(process.name)  CPU \(cpu)%  Mem \(memory) MB"
+                setProcessLine(item: item, index: index + 1, process: process)
             } else {
-                item.title = "  --"
+                setDisplayText(item, text: "  --")
             }
+        }
+    }
+
+    private func makeDisplayItem(_ title: String, bold: Bool = false) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: #selector(noop), keyEquivalent: "")
+        item.target = self
+        item.isEnabled = true
+        setDisplayText(item, text: title, bold: bold)
+        return item
+    }
+
+    private func setDisplayText(_ item: NSMenuItem, text: String, bold: Bool = false) {
+        item.attributedTitle = NSAttributedString(
+            string: text,
+            attributes: [
+                .foregroundColor: NSColor.white,
+                .font: bold ? NSFont.menuBarFont(ofSize: 15) : NSFont.menuFont(ofSize: 15)
+            ]
+        )
+    }
+
+    private func setSystemLine(_ snapshot: SystemSnapshot) {
+        let percentText = snapshot.totalCPUUsage.formatted(.number.precision(.fractionLength(0...1))) + "%"
+        let text = "System: \(PresentationFormatter.shortLoadLine(cpuUsage: snapshot.totalCPUUsage, level: snapshot.pressureLevel))"
+        loadItem.attributedTitle = attributedText(
+            fullText: text,
+            highlights: [(percentText, colorForUsage(snapshot.totalCPUUsage))]
+        )
+    }
+
+    private func setProcessLine(item: NSMenuItem, index: Int, process: ProcessSnapshot) {
+        let cpuValue = process.cpuPercent.formatted(.number.precision(.fractionLength(0...1))) + "%"
+        let memoryValue = process.memoryMB.formatted(.number.precision(.fractionLength(0...1))) + " MB"
+        let text = "  \(index). \(process.name)  CPU \(cpuValue)  Mem \(memoryValue)"
+        item.attributedTitle = attributedText(
+            fullText: text,
+            highlights: [(cpuValue, colorForUsage(process.cpuPercent))]
+        )
+    }
+
+    private func attributedText(
+        fullText: String,
+        highlights: [(String, NSColor)] = []
+    ) -> NSAttributedString {
+        let attributed = NSMutableAttributedString(
+            string: fullText,
+            attributes: [
+                .foregroundColor: NSColor.white,
+                .font: NSFont.menuFont(ofSize: 15)
+            ]
+        )
+
+        for (substring, color) in highlights {
+            let range = (fullText as NSString).range(of: substring)
+            if range.location != NSNotFound {
+                attributed.addAttribute(.foregroundColor, value: color, range: range)
+            }
+        }
+
+        return attributed
+    }
+
+    private func colorForUsage(_ usage: Double) -> NSColor {
+        switch usage {
+        case ..<35:
+            return NSColor.systemGreen
+        case ..<70:
+            return NSColor.systemYellow
+        default:
+            return NSColor.systemRed
         }
     }
 }
