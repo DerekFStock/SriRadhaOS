@@ -158,11 +158,7 @@ import Testing
     #expect(grouped[0].cpuPercent == 30)
 }
 
-private func makeSnapshot(
-    cpu: Double,
-    topCPU: Double,
-    processName: String
-) -> SystemSnapshot {
+@Test func diagnosisCallsOutWindowServerUiPressure() {
     let memory = MemorySnapshot(
         usedMB: 8_000,
         freeMB: 4_000,
@@ -171,18 +167,124 @@ private func makeSnapshot(
         swapTotalMB: 1_024,
         pressureLevel: .calm
     )
-    let process = ProcessSnapshot(
-        pid: 42,
-        identityKey: processName.lowercased(),
-        name: processName,
-        cpuPercent: topCPU,
-        memoryMB: 500,
-        impactScore: topCPU + 2
+
+    let diagnosis = ResourceScorer.diagnosis(
+        totalCPUUsage: 42,
+        memory: memory,
+        topProcesses: [
+            ProcessSnapshot(
+                pid: 1,
+                identityKey: "windowserver",
+                name: "WindowServer",
+                cpuPercent: 30,
+                memoryMB: 150,
+                impactScore: 30
+            ),
+            ProcessSnapshot(
+                pid: 2,
+                identityKey: "google-chrome",
+                name: "Google Chrome (6 procs)",
+                cpuPercent: 28,
+                memoryMB: 2_000,
+                impactScore: 40
+            )
+        ]
+    )
+
+    #expect(diagnosis.summary.contains("WindowServer"))
+    #expect(diagnosis.summary.contains("UI"))
+}
+
+@Test func historyAnalyzerCallsOutUiJankPair() {
+    let baseline = makeSnapshot(
+        cpu: 25,
+        memoryPressure: .calm,
+        processes: [
+            ProcessSnapshot(
+                pid: 1,
+                identityKey: "windowserver",
+                name: "WindowServer",
+                cpuPercent: 12,
+                memoryMB: 150,
+                impactScore: 12
+            ),
+            ProcessSnapshot(
+                pid: 2,
+                identityKey: "google-chrome",
+                name: "Google Chrome (5 procs)",
+                cpuPercent: 16,
+                memoryMB: 1_600,
+                impactScore: 24
+            )
+        ]
+    )
+
+    let current = makeSnapshot(
+        cpu: 39,
+        memoryPressure: .calm,
+        processes: [
+            ProcessSnapshot(
+                pid: 1,
+                identityKey: "windowserver",
+                name: "WindowServer",
+                cpuPercent: 28,
+                memoryMB: 150,
+                impactScore: 28
+            ),
+            ProcessSnapshot(
+                pid: 2,
+                identityKey: "google-chrome",
+                name: "Google Chrome (5 procs)",
+                cpuPercent: 34,
+                memoryMB: 1_650,
+                impactScore: 41
+            )
+        ]
+    )
+
+    let summary = HistoryAnalyzer.summarize(current: current, history: [baseline, current])
+    #expect(summary.summary.contains("WindowServer"))
+    #expect(summary.summary.contains("UI jank"))
+}
+
+private func makeSnapshot(
+    cpu: Double,
+    topCPU: Double,
+    processName: String
+) -> SystemSnapshot {
+    makeSnapshot(
+        cpu: cpu,
+        memoryPressure: .calm,
+        processes: [
+            ProcessSnapshot(
+                pid: 42,
+                identityKey: processName.lowercased(),
+                name: processName,
+                cpuPercent: topCPU,
+                memoryMB: 500,
+                impactScore: topCPU + 2
+            )
+        ]
+    )
+}
+
+private func makeSnapshot(
+    cpu: Double,
+    memoryPressure: ResourcePressureLevel,
+    processes: [ProcessSnapshot]
+) -> SystemSnapshot {
+    let memory = MemorySnapshot(
+        usedMB: 8_000,
+        freeMB: 4_000,
+        compressedMB: 200,
+        swapUsedMB: 0,
+        swapTotalMB: 1_024,
+        pressureLevel: memoryPressure
     )
     let diagnosis = ResourceScorer.diagnosis(
         totalCPUUsage: cpu,
         memory: memory,
-        topProcesses: [process]
+        topProcesses: processes
     )
 
     return SystemSnapshot(
@@ -190,7 +292,7 @@ private func makeSnapshot(
         totalCPUUsage: cpu,
         memory: memory,
         pressureLevel: diagnosis.pressureLevel,
-        topProcesses: [process],
+        topProcesses: processes,
         diagnosis: diagnosis
     )
 }

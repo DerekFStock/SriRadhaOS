@@ -21,6 +21,19 @@ public enum HistoryAnalyzer {
             )
         }
 
+        if let (windowServer, partner) = ResourceScorer.uiPressurePair(in: current.topProcesses) {
+            let baselineByKey = Dictionary(uniqueKeysWithValues: baseline.topProcesses.map { ($0.identityKey, $0) })
+            let windowServerDelta = windowServer.cpuPercent - (baselineByKey[windowServer.identityKey]?.cpuPercent ?? 0)
+            let partnerDelta = partner.cpuPercent - (baselineByKey[partner.identityKey]?.cpuPercent ?? 0)
+
+            if windowServerDelta >= 10 || partnerDelta >= 15 {
+                return ChangeSummary(
+                    summary: "\(partner.name) and WindowServer both climbed, which may feel like UI jank.",
+                    processSpike: partnerDelta >= windowServerDelta ? partner : windowServer
+                )
+            }
+        }
+
         let cpuDelta = current.totalCPUUsage - baseline.totalCPUUsage
         if cpuDelta >= 15 {
             if let spikingProcess = leadingProcessSpike(current: current, baseline: baseline) {

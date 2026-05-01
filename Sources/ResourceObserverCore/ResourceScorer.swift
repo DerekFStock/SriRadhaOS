@@ -71,6 +71,17 @@ public enum ResourceScorer {
             )
         }
 
+        if let windowServer = process(namedLike: "windowserver", in: topProcesses),
+           let partner = uiPressurePartner(in: topProcesses, excluding: windowServer.identityKey),
+           windowServer.cpuPercent >= 20 {
+            let summary = "\(partner.name) and WindowServer are likely contributing to UI rendering pressure."
+            return Diagnosis(
+                summary: summary,
+                pressureLevel: level,
+                primaryBottleneck: .cpu
+            )
+        }
+
         let summary: String
         switch cpuLevel {
         case .calm:
@@ -87,6 +98,35 @@ public enum ResourceScorer {
             pressureLevel: level,
             primaryBottleneck: .cpu
         )
+    }
+
+    static func uiPressurePair(in topProcesses: [ProcessSnapshot]) -> (ProcessSnapshot, ProcessSnapshot)? {
+        guard let windowServer = process(namedLike: "windowserver", in: topProcesses),
+              let partner = uiPressurePartner(in: topProcesses, excluding: windowServer.identityKey),
+              windowServer.cpuPercent >= 20 else {
+            return nil
+        }
+
+        return (windowServer, partner)
+    }
+
+    private static func uiPressurePartner(
+        in topProcesses: [ProcessSnapshot],
+        excluding excludedIdentityKey: String
+    ) -> ProcessSnapshot? {
+        let preferredPartners = ["google-chrome", "xcode", "ios-simulator", "codex", "safari"]
+
+        for identityKey in preferredPartners {
+            if let match = topProcesses.first(where: { $0.identityKey == identityKey && $0.identityKey != excludedIdentityKey }) {
+                return match
+            }
+        }
+
+        return topProcesses.first(where: { $0.identityKey != excludedIdentityKey && $0.cpuPercent >= 20 })
+    }
+
+    private static func process(namedLike needle: String, in topProcesses: [ProcessSnapshot]) -> ProcessSnapshot? {
+        topProcesses.first { $0.identityKey.contains(needle) || $0.name.lowercased().contains(needle) }
     }
 }
 
