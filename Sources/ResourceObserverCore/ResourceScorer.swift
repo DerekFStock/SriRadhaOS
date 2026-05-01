@@ -18,10 +18,10 @@ public enum ResourceScorer {
         freeRatio: Double,
         swapUsedMB: Double
     ) -> ResourcePressureLevel {
-        if swapUsedMB >= 4_096 || freeRatio < 0.03 {
+        if swapUsedMB >= 1_024 || freeRatio < 0.02 {
             return .severe
         }
-        if swapUsedMB >= 1_024 || freeRatio < 0.06 {
+        if swapUsedMB >= 256 || freeRatio < 0.05 {
             return .high
         }
         if swapUsedMB >= 128 || freeRatio < 0.12 {

@@ -15,6 +15,13 @@ import Testing
     #expect(ResourceScorer.cpuPressureLevel(for: 90) == .severe)
 }
 
+@Test func memoryPressureThresholdsAreLessAggressiveWithoutSwap() {
+    #expect(ResourceScorer.memoryPressureLevel(freeRatio: 0.10, swapUsedMB: 0) == .elevated)
+    #expect(ResourceScorer.memoryPressureLevel(freeRatio: 0.04, swapUsedMB: 0) == .high)
+    #expect(ResourceScorer.memoryPressureLevel(freeRatio: 0.025, swapUsedMB: 0) == .high)
+    #expect(ResourceScorer.memoryPressureLevel(freeRatio: 0.015, swapUsedMB: 0) == .severe)
+}
+
 @Test func diagnosisUsesTopProcessWhenAvailable() {
     let memory = MemorySnapshot(
         usedMB: 8_000,
@@ -132,6 +139,8 @@ import Testing
     #expect(PresentationFormatter.severitySymbol(for: .elevated) == "!")
     #expect(PresentationFormatter.severitySymbol(for: .high) == "!!")
     #expect(PresentationFormatter.severitySymbol(for: .severe) == "!!!")
+    #expect(PresentationFormatter.shortOverallLine(level: .high) == "!! High")
+    #expect(PresentationFormatter.shortCPULine(12.8).contains("12.8"))
 }
 
 @Test func processGrouperCombinesChromeHelpers() {

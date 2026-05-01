@@ -14,12 +14,13 @@ public enum PresentationFormatter {
         }
     }
 
-    public static func shortLoadLine(
-        cpuUsage: Double,
-        level: ResourcePressureLevel
-    ) -> String {
+    public static func shortOverallLine(level: ResourcePressureLevel) -> String {
+        "\(severitySymbol(for: level)) \(level.rawValue)"
+    }
+
+    public static func shortCPULine(_ cpuUsage: Double) -> String {
         let cpu = cpuUsage.formatted(.number.precision(.fractionLength(0...1)))
-        return "\(severitySymbol(for: level)) \(level.rawValue)  CPU \(cpu)%"
+        return "CPU \(cpu)%"
     }
 
     public static func shortMemoryLine(_ memory: MemorySnapshot) -> String {

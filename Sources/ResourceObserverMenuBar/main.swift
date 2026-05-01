@@ -130,7 +130,8 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
     private let menu = NSMenu()
     private var timer: Timer?
 
-    private lazy var loadItem = makeDisplayItem("System: --")
+    private lazy var overallItem = makeDisplayItem("Overall: --")
+    private lazy var cpuItem = makeDisplayItem("CPU: --")
     private lazy var memoryItem = makeDisplayItem("Memory: --")
     private lazy var diagnosisItem = makeDisplayItem("Likely Cause: --")
     private lazy var changeItem = makeDisplayItem("Changed Recently: --")
@@ -144,7 +145,12 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         setupMenu()
-        setStatusTitle(symbol: "·", percentageText: "--", color: .white)
+        setStatusTitle(
+            severitySymbol: "·",
+            severityColor: .white,
+            percentageText: "--",
+            percentageColor: .white
+        )
         statusItem.menu = menu
         refresh()
 
@@ -166,7 +172,8 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
 
         menu.addItem(titleItem)
         menu.addItem(.separator())
-        menu.addItem(loadItem)
+        menu.addItem(overallItem)
+        menu.addItem(cpuItem)
         menu.addItem(memoryItem)
         menu.addItem(diagnosisItem)
         menu.addItem(changeItem)
@@ -206,7 +213,12 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
             let update = try session.nextUpdate()
             apply(update: update)
         } catch {
-            setStatusTitle(symbol: "!!!", percentageText: "--", color: .systemRed)
+            setStatusTitle(
+                severitySymbol: "!!!",
+                severityColor: .systemRed,
+                percentageText: "--",
+                percentageColor: .white
+            )
             setDisplayText(diagnosisItem, text: "Likely Cause: Failed to sample resources")
             setDisplayText(changeItem, text: "Changed Recently: \(error)")
         }
@@ -217,12 +229,14 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
         let statusSymbol = PresentationFormatter.severitySymbol(for: snapshot.pressureLevel)
         let statusCPU = snapshot.totalCPUUsage.formatted(.number.precision(.fractionLength(0...0))) + "%"
         setStatusTitle(
-            symbol: statusSymbol,
+            severitySymbol: statusSymbol,
+            severityColor: colorForSeverity(snapshot.pressureLevel),
             percentageText: statusCPU,
-            color: colorForUsage(snapshot.totalCPUUsage)
+            percentageColor: colorForUsage(snapshot.totalCPUUsage)
         )
 
-        setSystemLine(snapshot)
+        setOverallLine(snapshot)
+        setCPULine(snapshot)
         setDisplayText(memoryItem, text: "Memory: \(PresentationFormatter.shortMemoryLine(snapshot.memory))")
         setDisplayText(diagnosisItem, text: "Likely Cause: \(snapshot.diagnosis.summary)")
         setDisplayText(changeItem, text: "Changed Recently: \(update.changeSummary.summary)")
@@ -258,12 +272,21 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
         setDisplayView(item, attributedText: attributed)
     }
 
-    private func setSystemLine(_ snapshot: SystemSnapshot) {
-        let percentText = snapshot.totalCPUUsage.formatted(.number.precision(.fractionLength(0...1))) + "%"
-        let text = "System: \(PresentationFormatter.shortLoadLine(cpuUsage: snapshot.totalCPUUsage, level: snapshot.pressureLevel))"
-        setDisplayView(loadItem, attributedText: attributedText(
+    private func setOverallLine(_ snapshot: SystemSnapshot) {
+        let severityText = PresentationFormatter.shortOverallLine(level: snapshot.pressureLevel)
+        let text = "Overall: \(severityText)"
+        setDisplayView(overallItem, attributedText: attributedText(
             fullText: text,
-            highlights: [(percentText, colorForUsage(snapshot.totalCPUUsage))]
+            highlights: [(severityText, colorForSeverity(snapshot.pressureLevel))]
+        ))
+    }
+
+    private func setCPULine(_ snapshot: SystemSnapshot) {
+        let cpuText = snapshot.totalCPUUsage.formatted(.number.precision(.fractionLength(0...1))) + "%"
+        let text = "CPU: \(PresentationFormatter.shortCPULine(snapshot.totalCPUUsage))"
+        setDisplayView(cpuItem, attributedText: attributedText(
+            fullText: text,
+            highlights: [(cpuText, colorForUsage(snapshot.totalCPUUsage))]
         ))
     }
 
@@ -314,12 +337,17 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
         return attributed
     }
 
-    private func setStatusTitle(symbol: String, percentageText: String, color: NSColor) {
+    private func setStatusTitle(
+        severitySymbol: String,
+        severityColor: NSColor,
+        percentageText: String,
+        percentageColor: NSColor
+    ) {
         guard let button = statusItem.button else {
             return
         }
 
-        let fullText = "SR \(symbol) \(percentageText)"
+        let fullText = "SR \(severitySymbol) \(percentageText)"
         let attributed = NSMutableAttributedString(
             string: fullText,
             attributes: [
@@ -327,9 +355,13 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
                 .font: NSFont.menuBarFont(ofSize: 14)
             ]
         )
-        let range = (fullText as NSString).range(of: percentageText)
-        if range.location != NSNotFound {
-            attributed.addAttribute(.foregroundColor, value: color, range: range)
+        let severityRange = (fullText as NSString).range(of: severitySymbol)
+        if severityRange.location != NSNotFound {
+            attributed.addAttribute(.foregroundColor, value: severityColor, range: severityRange)
+        }
+        let percentageRange = (fullText as NSString).range(of: percentageText)
+        if percentageRange.location != NSNotFound {
+            attributed.addAttribute(.foregroundColor, value: percentageColor, range: percentageRange)
         }
         button.attributedTitle = attributed
     }
@@ -342,6 +374,17 @@ final class MenuBarController: NSObject, NSApplicationDelegate {
             return NSColor.systemYellow
         default:
             return NSColor.systemRed
+        }
+    }
+
+    private func colorForSeverity(_ level: ResourcePressureLevel) -> NSColor {
+        switch level {
+        case .calm:
+            return .systemGreen
+        case .elevated:
+            return .systemYellow
+        case .high, .severe:
+            return .systemRed
         }
     }
 }
