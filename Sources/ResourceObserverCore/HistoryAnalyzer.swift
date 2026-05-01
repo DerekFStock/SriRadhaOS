@@ -34,6 +34,17 @@ public enum HistoryAnalyzer {
             }
         }
 
+        if let storageProcess = ResourceScorer.storagePressureProcess(in: current.topProcesses) {
+            let baselineByKey = Dictionary(uniqueKeysWithValues: baseline.topProcesses.map { ($0.identityKey, $0) })
+            let delta = storageProcess.cpuPercent - (baselineByKey[storageProcess.identityKey]?.cpuPercent ?? 0)
+            if delta >= 15 {
+                return ChangeSummary(
+                    summary: "\(storageProcess.name) climbed quickly, which may feel like indexing or storage slowdown.",
+                    processSpike: storageProcess
+                )
+            }
+        }
+
         let cpuDelta = current.totalCPUUsage - baseline.totalCPUUsage
         if cpuDelta >= 15 {
             if let spikingProcess = leadingProcessSpike(current: current, baseline: baseline) {

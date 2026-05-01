@@ -247,6 +247,79 @@ import Testing
     #expect(summary.summary.contains("UI jank"))
 }
 
+@Test func diagnosisCallsOutStoragePressure() {
+    let memory = MemorySnapshot(
+        usedMB: 8_000,
+        freeMB: 4_000,
+        compressedMB: 200,
+        swapUsedMB: 0,
+        swapTotalMB: 1_024,
+        pressureLevel: .calm
+    )
+
+    let diagnosis = ResourceScorer.diagnosis(
+        totalCPUUsage: 34,
+        memory: memory,
+        topProcesses: [
+            ProcessSnapshot(
+                pid: 1,
+                identityKey: "mds",
+                name: "mds",
+                cpuPercent: 41,
+                memoryMB: 150,
+                impactScore: 41
+            ),
+            ProcessSnapshot(
+                pid: 2,
+                identityKey: "xcode",
+                name: "Xcode",
+                cpuPercent: 28,
+                memoryMB: 1_400,
+                impactScore: 34
+            )
+        ]
+    )
+
+    #expect(diagnosis.primaryBottleneck == .disk)
+    #expect(diagnosis.summary.contains("storage pressure"))
+}
+
+@Test func historyAnalyzerCallsOutStorageSpike() {
+    let baseline = makeSnapshot(
+        cpu: 20,
+        memoryPressure: .calm,
+        processes: [
+            ProcessSnapshot(
+                pid: 1,
+                identityKey: "fileproviderd",
+                name: "fileproviderd",
+                cpuPercent: 12,
+                memoryMB: 80,
+                impactScore: 12
+            )
+        ]
+    )
+
+    let current = makeSnapshot(
+        cpu: 30,
+        memoryPressure: .calm,
+        processes: [
+            ProcessSnapshot(
+                pid: 1,
+                identityKey: "fileproviderd",
+                name: "fileproviderd",
+                cpuPercent: 39,
+                memoryMB: 82,
+                impactScore: 39
+            )
+        ]
+    )
+
+    let summary = HistoryAnalyzer.summarize(current: current, history: [baseline, current])
+    #expect(summary.summary.contains("storage slowdown"))
+    #expect(summary.processSpike?.identityKey == "fileproviderd")
+}
+
 private func makeSnapshot(
     cpu: Double,
     topCPU: Double,

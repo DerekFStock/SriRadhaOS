@@ -82,6 +82,14 @@ public enum ResourceScorer {
             )
         }
 
+        if let storageProcess = storagePressureProcess(in: topProcesses) {
+            return Diagnosis(
+                summary: storagePressureSummary(for: storageProcess),
+                pressureLevel: level,
+                primaryBottleneck: .disk
+            )
+        }
+
         let summary: String
         switch cpuLevel {
         case .calm:
@@ -110,23 +118,60 @@ public enum ResourceScorer {
         return (windowServer, partner)
     }
 
+    static func storagePressureProcess(in topProcesses: [ProcessSnapshot]) -> ProcessSnapshot? {
+        let candidate = topProcesses.first { isStorageRelated($0) && $0.cpuPercent >= 25 }
+        return candidate
+    }
+
     private static func uiPressurePartner(
         in topProcesses: [ProcessSnapshot],
         excluding excludedIdentityKey: String
     ) -> ProcessSnapshot? {
         let preferredPartners = ["google-chrome", "xcode", "ios-simulator", "codex", "safari"]
-
-        for identityKey in preferredPartners {
-            if let match = topProcesses.first(where: { $0.identityKey == identityKey && $0.identityKey != excludedIdentityKey }) {
-                return match
-            }
+        let preferredMatches = topProcesses.filter {
+            preferredPartners.contains($0.identityKey) && $0.identityKey != excludedIdentityKey
         }
 
-        return topProcesses.first(where: { $0.identityKey != excludedIdentityKey && $0.cpuPercent >= 20 })
+        if let strongestPreferred = preferredMatches.max(by: { $0.cpuPercent < $1.cpuPercent }) {
+            return strongestPreferred
+        }
+
+        return topProcesses
+            .filter { $0.identityKey != excludedIdentityKey && $0.cpuPercent >= 20 }
+            .max(by: { $0.cpuPercent < $1.cpuPercent })
     }
 
     private static func process(namedLike needle: String, in topProcesses: [ProcessSnapshot]) -> ProcessSnapshot? {
         topProcesses.first { $0.identityKey.contains(needle) || $0.name.lowercased().contains(needle) }
+    }
+
+    private static func isStorageRelated(_ process: ProcessSnapshot) -> Bool {
+        let identities: Set<String> = [
+            "bird",
+            "cloudd",
+            "fileproviderd",
+            "mds",
+            "mds_stores",
+            "mdworker_shared",
+            "mobileassetd",
+            "xprotectservice"
+        ]
+        return identities.contains(process.identityKey)
+    }
+
+    private static func storagePressureSummary(for process: ProcessSnapshot) -> String {
+        switch process.identityKey {
+        case "mds", "mds_stores", "mdworker_shared":
+            return "Spotlight indexing looks active and may be contributing to storage pressure."
+        case "fileproviderd", "bird", "cloudd":
+            return "File sync activity looks busy and may be contributing to storage pressure."
+        case "mobileassetd":
+            return "Asset downloads or background content updates may be contributing to storage pressure."
+        case "xprotectservice":
+            return "Background security scanning may be contributing to storage pressure."
+        default:
+            return "\(process.name) may be contributing to storage pressure."
+        }
     }
 }
 
